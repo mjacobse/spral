@@ -15,6 +15,7 @@ extern "C" {
    void spral_c_dsyrk(char *uplo, char *trans, int *n, int *k, double *alpha, const double *a, int *lda, double *beta, double *c, int *ldc);
    void spral_c_dtrsv(char *uplo, char *trans, char *diag, int *n, const double *a, int *lda, double *x, int *incx);
    void spral_c_dgemv(char *trans, int *m, int *n, const double* alpha, const double* a, int *lda, const double* x, int* incx, const double* beta, double* y, int* incy);
+   void spral_c_dger(int *m, int *n, const double *alpha, const double *x, int *incx, const double *y, int *incy, double *a, int *lda);
 }
 
 namespace spral { namespace ssids { namespace cpu {
@@ -32,6 +33,12 @@ template <>
 void gemv<double>(enum spral::ssids::cpu::operation trans, int m, int n, double alpha, const double* a, int lda, const double* x, int incx, double beta, double* y, int incy) {
    char ftrans = (trans==spral::ssids::cpu::OP_N) ? 'N' : 'T';
    spral_c_dgemv(&ftrans, &m, &n, &alpha, a, &lda, x, &incx, &beta, y, &incy);
+}
+
+/* _GER */
+template <>
+void host_ger<double>(int m, int n, double alpha, const double* x, int incx, const double* y, int incy, double* a, int lda) {
+   spral_c_dger(&m, &n, &alpha, x, &incx, y, &incy, a, &lda);
 }
 
 /* _POTRF */

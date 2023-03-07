@@ -5,7 +5,7 @@ module spral_blas_iface
   private
   public :: daxpy, dcopy, ddot, dnrm2, dscal
   public :: zaxpy, zcopy, zdotc, dznrm2, zscal
-  public :: dgemv, dtrsv
+  public :: dgemv, dger, dtrsv
   public :: dgemm, dsyrk, dtrsm
   public :: zgemm, ztrsm
 
@@ -90,6 +90,13 @@ module spral_blas_iface
       double precision, intent(in   ), dimension(*) :: x
       double precision, intent(inout), dimension(*) :: y
     end subroutine dgemv
+    subroutine dger( m, n, alpha, x, incx, y, incy, a, lda )
+      implicit none
+      integer, intent(in) :: m, n, incx, incy, lda
+      double precision, intent(in) :: alpha
+      double precision, intent(in), dimension(*) :: x, y
+      double precision, intent(inout), dimension(lda, n) :: a
+    end subroutine
     subroutine dtrsv( uplo, trans, diag, n, a, lda, x, incx )
       implicit none
       character, intent(in) :: uplo, trans, diag

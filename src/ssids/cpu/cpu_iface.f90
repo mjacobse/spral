@@ -172,4 +172,15 @@ bind(C)
    call dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
 end subroutine spral_c_dgemv
 
+subroutine spral_c_dger(m, n, alpha, x, incx, y, incy, a, lda) &
+bind(C)
+   use spral_blas_iface, only : dger
+   integer(C_INT), intent(in) :: m, n
+   integer(C_INT), intent(in) :: incx, incy, lda
+   real(C_DOUBLE), intent(in) :: alpha
+   real(C_DOUBLE), intent(in   ), dimension(*) :: x, y
+   real(C_DOUBLE), intent(inout), dimension(*) :: a
+   call dger(m, n, alpha, x, incx, y, incy, a, lda)
+end subroutine spral_c_dger
+
 end module spral_ssids_cpu_iface

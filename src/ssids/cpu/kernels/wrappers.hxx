@@ -17,6 +17,10 @@ void host_gemm(enum spral::ssids::cpu::operation transa, enum spral::ssids::cpu:
 template <typename T>
 void gemv(enum spral::ssids::cpu::operation trans, int m, int n, T alpha, const T* a, int lda, const T* x, int incx, T beta, T* y, int incy);
 
+/* _GER */
+template <typename T>
+void host_ger(int m, int n, T alpha, const T* x, int incx, const T* y, int incy, T* a, int lda);
+
 /* _POTRF */
 template <typename T>
 int lapack_potrf(enum spral::ssids::cpu::fillmode uplo, int n, T* a, int lda);

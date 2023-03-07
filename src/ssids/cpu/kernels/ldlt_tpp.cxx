@@ -229,9 +229,9 @@ int ldlt_tpp_factor(int m, int n, int* perm, double* a, int lda, double* d,
             d[2*nelim] = 1 / a[nelim*lda+nelim];
             d[2*nelim+1] = 0.0;
             apply_1x1(nelim, m, a, lda, ld, ldld, d);
-            host_gemm(OP_N, OP_T, m-nelim-1, n-nelim-1, 1, -1.0,
-                  &a[nelim*lda+nelim+1], lda, &ld[nelim+1], ldld,
-                  1.0, &a[(nelim+1)*lda+nelim+1], lda); // update trailing mat
+            host_ger(m-nelim-1, n-nelim-1, -1.0,
+                  &a[nelim*lda+nelim+1], 1, &ld[nelim+1], 1,
+                  &a[(nelim+1)*lda+nelim+1], lda); // update trailing mat
             nelim += 1;
             break;
          }
@@ -248,9 +248,9 @@ int ldlt_tpp_factor(int m, int n, int* perm, double* a, int lda, double* d,
             d[2*nelim] = 1 / a[nelim*lda+nelim];
             d[2*nelim+1] = 0.0;
             apply_1x1(nelim, m, a, lda, ld, ldld, d);
-            host_gemm(OP_N, OP_T, m-nelim-1, n-nelim-1, 1, -1.0,
-                  &a[nelim*lda+nelim+1], lda, &ld[nelim+1], ldld,
-                  1.0, &a[(nelim+1)*lda+nelim+1], lda); // update trailing mat
+            host_ger(m-nelim-1, n-nelim-1, -1.0,
+                  &a[nelim*lda+nelim+1], 1, &ld[nelim+1], 1,
+                  &a[(nelim+1)*lda+nelim+1], lda); // update trailing mat
             nelim += 1;
          } else {
             // That didn't work either. No more pivots to be found
