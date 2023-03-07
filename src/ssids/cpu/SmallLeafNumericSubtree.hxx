@@ -48,7 +48,7 @@ public:
 
       /* Add aval entries */
       for(int ni=symb_.sa_; ni<=symb_.en_; ++ni)
-         add_a(ni-symb_.sa_, symb_.symb_[ni], aval, scaling);
+         add_a_block(0, symb_.symb_[ni].num_a, old_nodes_[ni], aval, scaling);
 
       /* Perform factorization */
       for(int ni=symb_.sa_; ni<=symb_.en_; ++ni) {
@@ -70,39 +70,6 @@ public:
    }
 
 private:
-void add_a(
-      int si,
-      SymbolicNode const& snode,
-      T const* aval,
-      T const* scaling
-      ) {
-   double *lcol = lcol_ + symb_[si].lcol_offset;
-   size_t ldl = align_lda<double>(snode.nrow);
-   if(scaling) {
-      /* Scaling to apply */
-      for(int i=0; i<snode.num_a; i++) {
-         int64_t src  = snode.amap[2*i+0] - 1; // amap contains 1-based values
-         int64_t dest = snode.amap[2*i+1] - 1; // amap contains 1-based values
-         int c = dest / snode.nrow;
-         int r = dest % snode.nrow;
-         T rscale = scaling[ snode.rlist[r]-1 ];
-         T cscale = scaling[ snode.rlist[c]-1 ];
-         size_t k = c*ldl + r;
-         lcol[k] = rscale * aval[src] * cscale;
-      }
-   } else {
-      /* No scaling to apply */
-      for(int i=0; i<snode.num_a; i++) {
-         int64_t src  = snode.amap[2*i+0] - 1; // amap contains 1-based values
-         int64_t dest = snode.amap[2*i+1] - 1; // amap contains 1-based values
-         int c = dest / snode.nrow;
-         int r = dest % snode.nrow;
-         size_t k = c*ldl + r;
-         lcol[k] = aval[src];
-      }
-   }
-}
-
 void assemble(
       int si,
       SymbolicNode const& snode,
@@ -259,31 +226,7 @@ private:
          node.perm[i] = snode.rlist[i];
 
       /* Add A */
-      if(scaling) {
-         /* Scaling to apply */
-         for(int i=0; i<snode.num_a; i++) {
-            int64_t src  = snode.amap[2*i+0] - 1; // amap contains 1-based values
-            int64_t dest = snode.amap[2*i+1] - 1; // amap contains 1-based values
-            int c = dest / snode.nrow;
-            int r = dest % snode.nrow;
-            int64_t k = c*ldl + r;
-            if(r >= snode.ncol) k += node.ndelay_in;
-            T rscale = scaling[ snode.rlist[r]-1 ];
-            T cscale = scaling[ snode.rlist[c]-1 ];
-            node.lcol[k] = rscale * aval[src] * cscale;
-         }
-      } else {
-         /* No scaling to apply */
-         for(int i=0; i<snode.num_a; i++) {
-            int64_t src  = snode.amap[2*i+0] - 1; // amap contains 1-based values
-            int64_t dest = snode.amap[2*i+1] - 1; // amap contains 1-based values
-            int c = dest / snode.nrow;
-            int r = dest % snode.nrow;
-            int64_t k = c*ldl + r;
-            if(r >= snode.ncol) k += node.ndelay_in;
-            node.lcol[k] = aval[src];
-         }
-      }
+      add_a_block(0, snode.num_a, node, aval, scaling);
 
       /* Add children */
       if(node.first_child != NULL) {
