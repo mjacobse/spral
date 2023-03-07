@@ -53,10 +53,9 @@ public:
       /* Perform factorization */
       for(int ni=symb_.sa_; ni<=symb_.en_; ++ni) {
          // Assembly
-         int* map = work.get_ptr<int>(symb_.symb_.n+1);
          assemble
-            (ni-symb_.sa_, symb_.symb_[ni], &old_nodes_[ni], factor_alloc,
-             pool_alloc, map, aval, scaling);
+            (ni-symb_.sa_, symb_.symb_.n, symb_.symb_[ni], &old_nodes_[ni],
+             factor_alloc, pool_alloc, work, aval, scaling);
          // Update stats
          int nrow = symb_.symb_[ni].nrow;
          stats.maxfront = std::max(stats.maxfront, nrow);
@@ -105,16 +104,18 @@ void add_a(
 
 void assemble(
       int si,
+      int n,
       SymbolicNode const& snode,
       NumericNode<T,PoolAllocator>* node,
       FactorAllocator& factor_alloc,
       PoolAllocator& pool_alloc,
-      int* map,
+      Workspace& work,
       T const* aval,
       T const* scaling
       ) {
    /* Rebind allocators */
    typename FAIntTraits::allocator_type factor_alloc_int(factor_alloc);
+   typedef typename std::allocator_traits<PoolAllocator>::template rebind_alloc<int> PoolAllocInt;
 
    /* Count incoming delays and determine size of node */
    int nrow = snode.nrow;
@@ -136,6 +137,7 @@ void assemble(
       /* Build lookup vector, allowing for insertion of delayed vars */
       /* Note that while rlist[] is 1-indexed this is fine so long as lookup
        * is also 1-indexed (which it is as it is another node's rlist[] */
+      std::vector<int, PoolAllocInt> map(n+1, PoolAllocInt(pool_alloc));
       for(int i=0; i<snode.nrow; i++)
          map[ snode.rlist[i] ] = i;
       /* Loop over children adding contributions */
@@ -144,26 +146,23 @@ void assemble(
          /* Handle expected contributions (only if something there) */
          if(child->contrib) {
             int cm = csnode.nrow - csnode.ncol;
+            int* cache = work.get_ptr<int>(cm);
+            for(int j=0; j<cm; ++j)
+               cache[j] = map[ csnode.rlist[csnode.ncol+j] ];
             for(int i=0; i<cm; i++) {
-               int c = map[ csnode.rlist[csnode.ncol+i] ];
+               int c = cache[i];
                T *src = &child->contrib[i*cm];
                if(c < snode.ncol) {
                   // Contribution added to lcol
-                  int ldd = align_lda<double>(nrow);
+                  int ldd = align_lda<T>(nrow);
                   T *dest = &node->lcol[c*ldd];
-                  for(int j=i; j<cm; j++) {
-                     int r = map[ csnode.rlist[csnode.ncol+j] ];
-                     dest[r] += src[j];
-                  }
+                  asm_col(cm-i, &cache[i], &src[i], dest);
                } else {
                   // Contribution added to contrib
                   // FIXME: Add after contribution block established?
                   int ldd = snode.nrow - snode.ncol;
-                  T *dest = &node->contrib[(c-ncol)*ldd];
-                  for(int j=i; j<cm; j++) {
-                     int r = map[ csnode.rlist[csnode.ncol+j] ] - ncol;
-                     dest[r] += src[j];
-                  }
+                  T *dest = &node->contrib[(c-ncol)*ldd - ncol];
+                  asm_col(cm-i, &cache[i], &src[i], dest);
                }
             }
             /* Free memory from child contribution block */
@@ -198,10 +197,9 @@ public:
                omp_get_thread_num(), ni, symb_[ni].parent, symb_.nnodes_,
                symb_[ni].nrow, symb_[ni].ncol);*/
          // Assembly of node (not of contribution block)
-         int* map = work.get_ptr<int>(symb_.symb_.n+1);
          assemble_pre
-            (symb_.symb_[ni], old_nodes_[ni], factor_alloc,
-             pool_alloc, map, aval, scaling);
+            (symb_.symb_.n, symb_.symb_[ni], old_nodes_[ni], factor_alloc,
+             pool_alloc, work, aval, scaling);
          // Update stats
          int nrow = symb_.symb_[ni].nrow + old_nodes_[ni].ndelay_in;
          stats.maxfront = std::max(stats.maxfront, nrow);
@@ -215,23 +213,25 @@ public:
          if(stats.flag<Flag::SUCCESS) return; // something is wrong
 
          // Assemble children into contribution block
-         assemble_post(symb_.symb_[ni], old_nodes_[ni], pool_alloc, map);
+         assemble_post(symb_.symb_.n, symb_.symb_[ni], old_nodes_[ni], pool_alloc, work);
       }
    }
 
 private:
    void assemble_pre(
+         int n,
          SymbolicNode const& snode,
          NumericNode<T,PoolAllocator>& node,
          FactorAllocator& factor_alloc,
          PoolAllocator& pool_alloc,
-         int* map,
+         Workspace& work,
          T const* aval,
          T const* scaling
          ) {
       /* Rebind allocators */
       typename FADoubleTraits::allocator_type factor_alloc_double(factor_alloc);
       typename FAIntTraits::allocator_type factor_alloc_int(factor_alloc);
+      typedef typename std::allocator_traits<PoolAllocator>::template rebind_alloc<int> PoolAllocInt;
 
       /* Count incoming delays and determine size of node */
       node.ndelay_in = 0;
@@ -287,6 +287,7 @@ private:
 
       /* Add children */
       if(node.first_child != NULL) {
+         std::vector<int, PoolAllocInt> map(n+1, PoolAllocInt(pool_alloc));
          /* Build lookup vector, allowing for insertion of delayed vars */
          /* Note that while rlist[] is 1-indexed this is fine so long as lookup
           * is also 1-indexed (which it is as it is another node's rlist[] */
@@ -323,20 +324,8 @@ private:
             /* Handle expected contributions (only if something there) */
             if(child->contrib) {
                int cm = csnode.nrow - csnode.ncol;
-               for(int i=0; i<cm; i++) {
-                  int c = map[ csnode.rlist[csnode.ncol+i] ];
-                  T *src = &child->contrib[i*cm];
-                  // NB: we handle contribution to contrib in assemble_post()
-                  if(c < snode.ncol) {
-                     // Contribution added to lcol
-                     int ldd = align_lda<T>(nrow);
-                     T *dest = &node.lcol[c*ldd];
-                     for(int j=i; j<cm; j++) {
-                        int r = map[ csnode.rlist[csnode.ncol+j] ];
-                        dest[r] += src[j];
-                     }
-                  }
-               }
+               int* cache = work.get_ptr<int>(cm);
+               assemble_expected(0, cm, node, *child, map, cache);
             }
          }
       }
@@ -399,16 +388,21 @@ private:
    }
 
    void assemble_post(
+         int n,
          SymbolicNode const& snode,
          NumericNode<T,PoolAllocator>& node,
          PoolAllocator& pool_alloc,
-         int* map
+         Workspace& work
          ) {
+      /* Rebind allocators */
+      typedef typename std::allocator_traits<PoolAllocator>::template rebind_alloc<int> PoolAllocInt;
+
       /* Initialise variables */
       int ncol = snode.ncol + node.ndelay_in;
 
       /* Add children */
       if(node.first_child != NULL) {
+         std::vector<int, PoolAllocInt> map(n+1, PoolAllocInt(pool_alloc));
          /* Build lookup vector, allowing for insertion of delayed vars */
          /* Note that while rlist[] is 1-indexed this is fine so long as lookup
           * is also 1-indexed (which it is as it is another node's rlist[] */
@@ -421,20 +415,8 @@ private:
             SymbolicNode const& csnode = child->symb;
             if(!child->contrib) continue;
             int cm = csnode.nrow - csnode.ncol;
-            for(int i=0; i<cm; i++) {
-               int c = map[ csnode.rlist[csnode.ncol+i] ];
-               T *src = &child->contrib[i*cm];
-               // NB: only interested in contribution to generated element
-               if(c >= snode.ncol) {
-                  // Contribution added to contrib
-                  int ldd = snode.nrow - snode.ncol;
-                  T *dest = &node.contrib[(c-ncol)*ldd];
-                  for(int j=i; j<cm; j++) {
-                     int r = map[ csnode.rlist[csnode.ncol+j] ] - ncol;
-                     dest[r] += src[j];
-                  }
-               }
-            }
+            int* cache = work.get_ptr<int>(cm);
+            assemble_expected_contrib(0, cm, node, *child, map, cache);
             /* Free memory from child contribution block */
             child->free_contrib();
          }
