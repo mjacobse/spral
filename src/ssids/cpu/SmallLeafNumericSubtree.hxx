@@ -231,7 +231,8 @@ private:
       /* Rebind allocators */
       typename FADoubleTraits::allocator_type factor_alloc_double(factor_alloc);
       typename FAIntTraits::allocator_type factor_alloc_int(factor_alloc);
-      typedef typename std::allocator_traits<PoolAllocator>::template rebind_alloc<int> PoolAllocInt;
+      typedef typename std::allocator_traits<PoolAllocator>::template rebind_traits<int> PAIntTraits;
+      typename PAIntTraits::allocator_type pool_alloc_int(pool_alloc);
 
       /* Count incoming delays and determine size of node */
       node.ndelay_in = 0;
@@ -287,7 +288,11 @@ private:
 
       /* Add children */
       if(node.first_child != NULL) {
-         std::vector<int, PoolAllocInt> map(n+1, PoolAllocInt(pool_alloc));
+         const auto map_deleter = [&pool_alloc_int, n](int* p) {
+            PAIntTraits::deallocate(pool_alloc_int, p, n+1);
+         };
+         auto map = std::unique_ptr<int[], decltype(map_deleter)>(
+               PAIntTraits::allocate(pool_alloc_int, n+1), map_deleter);
          /* Build lookup vector, allowing for insertion of delayed vars */
          /* Note that while rlist[] is 1-indexed this is fine so long as lookup
           * is also 1-indexed (which it is as it is another node's rlist[] */
@@ -395,14 +400,19 @@ private:
          Workspace& work
          ) {
       /* Rebind allocators */
-      typedef typename std::allocator_traits<PoolAllocator>::template rebind_alloc<int> PoolAllocInt;
+      typedef typename std::allocator_traits<PoolAllocator>::template rebind_traits<int> PAIntTraits;
+      typename PAIntTraits::allocator_type pool_alloc_int(pool_alloc);
 
       /* Initialise variables */
       int ncol = snode.ncol + node.ndelay_in;
 
       /* Add children */
       if(node.first_child != NULL) {
-         std::vector<int, PoolAllocInt> map(n+1, PoolAllocInt(pool_alloc));
+         const auto map_deleter = [&pool_alloc_int, n](int* p) {
+            PAIntTraits::deallocate(pool_alloc_int, p, n+1);
+         };
+         auto map = std::unique_ptr<int[], decltype(map_deleter)>(
+               PAIntTraits::allocate(pool_alloc_int, n+1), map_deleter);
          /* Build lookup vector, allowing for insertion of delayed vars */
          /* Note that while rlist[] is 1-indexed this is fine so long as lookup
           * is also 1-indexed (which it is as it is another node's rlist[] */
