@@ -73,7 +73,6 @@ public:
             if(flops[current] >= options.small_subtree_threshold) break;
             last = current;
          }
-         if(last==ni) { ++ni; continue; } // No point for a single node
          // Nodes ni:last are in subtree
          small_leafs_.emplace_back(
                ni, last, sa, sptr, sparent, rptr, rlist, nptr, nlist, *this
