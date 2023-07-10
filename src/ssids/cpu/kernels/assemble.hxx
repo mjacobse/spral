@@ -149,6 +149,7 @@ void assemble_pre(
       FactorAlloc& factor_alloc,
       PoolAlloc& pool_alloc,
       std::vector<Workspace>& work,
+      std::vector<Workspace>& workspace_map,
       T const* aval,
       T const* scaling
       ) {
@@ -228,7 +229,7 @@ void assemble_pre(
    /* Build lookup vector, allowing for insertion of delayed vars */
    /* Note that while rlist[] is 1-indexed this is fine so long as lookup
     * is also 1-indexed (which it is as it is another node's rlist[] */
-   std::vector<int, PoolAllocInt> map(n+1, PoolAllocInt(pool_alloc));
+   int* map = workspace_map[omp_get_thread_num()].get_ptr<int>(n + 1);
    for(int i=0; i<snode.ncol; i++)
       map[ snode.rlist[i] ] = i;
    for(int i=snode.ncol; i<snode.nrow; i++)
@@ -354,7 +355,8 @@ void assemble_post(
       void** child_contrib,
       NumericNode<T,PoolAlloc>& node,
       PoolAlloc& pool_alloc,
-      std::vector<Workspace>& work
+      std::vector<Workspace>& work,
+      std::vector<Workspace>& workspace_map
       ) {
    /* Rebind allocators */
    typedef typename std::allocator_traits<PoolAlloc>::template rebind_traits<int> PAIntTraits;
@@ -369,7 +371,7 @@ void assemble_post(
       /* Build lookup vector, allowing for insertion of delayed vars */
       /* Note that while rlist[] is 1-indexed this is fine so long as lookup
        * is also 1-indexed (which it is as it is another node's rlist[] */
-      if(!map) map = PAIntTraits::allocate(pool_alloc_int, n+1);
+      map = workspace_map[omp_get_thread_num()].get_ptr<int>(n + 1);
       // FIXME: probably don't need to worry about first ncol?
       for(int i=0; i<snode.ncol; i++)
          map[ snode.rlist[i] ] = i;
@@ -434,7 +436,6 @@ void assemble_post(
       /* Free memory from child contribution block */
       spral_ssids_contrib_free_dbl(child_contrib[contrib_idx]);
    }
-   if(map) PAIntTraits::deallocate(pool_alloc_int, map, n+1);
 }
 
 }}} /* namespaces spral::ssids::cpu */

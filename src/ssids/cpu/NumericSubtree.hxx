@@ -79,6 +79,10 @@ public:
       work.reserve(num_threads);
       for(int i=0; i<num_threads; ++i)
          work.emplace_back(PAGE_SIZE);
+      std::vector<Workspace> workspace_map;
+      workspace_map.reserve(num_threads);
+      for(int i=0; i<num_threads; ++i)
+         workspace_map.emplace_back(symb_.n + 1);
 
       // initialise stats already so we can safely early-return in case of
       // failure if not compiled with OpenMP (instead of omp cancel)
@@ -162,7 +166,7 @@ public:
             #pragma omp task default(none) \
                firstprivate(ni) \
                shared(aval, abort, child_contrib, options, scaling, \
-                      thread_stats, work) \
+                      thread_stats, work, workspace_map) \
                depend(inout: this_lcol[0:1]) \
                depend(in: parent_lcol[0:1])
             {
@@ -179,7 +183,8 @@ public:
                   // Assembly of node (not of contribution block)
                   assemble_pre
                      (posdef, symb_.n, symb_[ni], child_contrib, nodes_[ni],
-                      factor_alloc_, pool_alloc_, work, aval, scaling);
+                      factor_alloc_, pool_alloc_, work, workspace_map, aval,
+                      scaling);
                   // Update stats
                   int nrow = symb_[ni].nrow + nodes_[ni].ndelay_in;
                   thread_stats[this_thread].maxfront =
@@ -209,7 +214,7 @@ public:
                   my_abort = abort;
                   if (!my_abort)
                      assemble_post(symb_.n, symb_[ni], child_contrib,
-                           nodes_[ni], pool_alloc_, work);
+                           nodes_[ni], pool_alloc_, work, workspace_map);
                } catch (std::bad_alloc const&) {
                   thread_stats[omp_get_thread_num()].flag =
                      Flag::ERROR_ALLOCATION;
