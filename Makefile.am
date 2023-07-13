@@ -325,7 +325,8 @@ check_PROGRAMS += \
 	ssids_test \
 	ssids_kernel_test \
 	examples/Fortran/ssids \
-	examples/C/ssids
+	examples/C/ssids \
+	examples/CXX/ssids_benchmark
 ssids_test_SOURCES = tests/ssids/ssids.f90
 ssids_kernel_test_SOURCES = tests/ssids/kernels.cxx \
 									 tests/ssids/kernels/AlignedAllocator.hxx \
@@ -344,18 +345,22 @@ ssids_kernel_test_SOURCES = tests/ssids/kernels.cxx \
 examples_Fortran_ssids_SOURCES = examples/Fortran/ssids.f90
 examples/Fortran/ssids.$(OBJEXT): libspral.a
 examples_C_ssids_SOURCES = examples/C/ssids.c
+examples_CXX_ssids_benchmark_SOURCES = examples/CXX/ssids_benchmark.cxx
 tests/ssids/ssids.$(OBJEXT): libspral.a
 tests/ssids/kernels.$(OBJEXT): libspral.a
 examples/C/ssids.$(OBJEXT): libspral.a
+examples/CXX/ssids_benchmark.$(OBJEXT): libspral.a
 TESTS += ssids_test ssids_kernel_test
 spral_ssids_LDADD = $(LDADD) $(SPRAL_LINK_LIBS)
 ssids_test_LDADD = $(LDADD) $(SPRAL_LINK_LIBS)
 examples_Fortran_ssids_LDADD = $(LDADD) $(SPRAL_LINK_LIBS)
 examples_C_ssids_LDADD = $(LDADD) $(SPRAL_LINK_LIBS)
+examples_CXX_ssids_benchmark_LDADD = $(LDADD) $(SPRAL_LINK_LIBS) -lbenchmark
 spral_ssids_LINK = $(SPRALLINK)
 ssids_test_LINK = $(SPRALLINK)
 examples_Fortran_ssids_LINK = $(SPRALLINK)
 examples_C_ssids_LINK = $(SPRALLINK) $(NO_FORT_MAIN)
+examples_CXX_ssids_benchmark_LINK = $(SPRALLINK) $(NO_FORT_MAIN)
 
 # SSMFE
 include_HEADERS += include/spral_ssmfe.h
