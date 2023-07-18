@@ -113,8 +113,10 @@ public:
    /** \brief Return given node of this tree. */
    Node const& operator[](int idx) const { return nodes_[idx]; }
 protected:
+public:
    int sa_; //< First node in subtree.
    int en_; //< Last node in subtree.
+protected:
    int nnodes_; //< Number of nodes in subtree.
    int nfactor_; //< Number of entries in factor for subtree.
    int parent_; //< Parent of subtree in parttree.
