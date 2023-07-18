@@ -14,6 +14,7 @@
 #include "ssids/cpu/SmallLeafNumericSubtree.hxx"
 #include "ssids/cpu/ThreadStats.hxx"
 
+#include <cassert>
 
 namespace spral { namespace ssids { namespace cpu {
 
@@ -93,70 +94,74 @@ public:
       abort = false; // Set to true to abort remaining tasks
       #pragma omp taskgroup
       {
-         /* Loop over small leaf subtrees */
-         for(unsigned int si=0; si<symb_.small_leafs_.size(); ++si) {
-            auto* parent_lcol = &nodes_[symb_.small_leafs_[si].get_parent()];
-            #pragma omp task default(none) \
-               firstprivate(si) \
-               shared(aval, abort, options, scaling, thread_stats, work) \
-               depend(in: parent_lcol[0:1])
-            {
-              bool my_abort;
-              #pragma omp atomic read
-              my_abort = abort;
-              if (!my_abort) {
-               #pragma omp cancellation point taskgroup
-               try {
-                  int this_thread = omp_get_thread_num();
+         unsigned int si=0;
+         for(int ni=0; ni<symb_.nnodes_; ++ni) {
+            if(symb_[ni].insmallleaf) {
+               /* task for small leaf subtree */
+               assert(si < symb_.small_leafs_.size());
+               assert(ni == symb_.small_leafs_[si].sa_);
+               auto* parent_lcol = &nodes_[symb_.small_leafs_[si].get_parent()];
+               #pragma omp task default(none) \
+                  firstprivate(si) \
+                  shared(aval, abort, options, scaling, thread_stats, work) \
+                  depend(in: parent_lcol[0:1])
+               {
+               bool my_abort;
+               #pragma omp atomic read
+               my_abort = abort;
+               if (!my_abort) {
+                  #pragma omp cancellation point taskgroup
+                  try {
+                     int this_thread = omp_get_thread_num();
 #ifdef PROFILE
-                  Profile::Task task_subtree("TA_SUBTREE");
+                     Profile::Task task_subtree("TA_SUBTREE");
 #endif
-                  auto const& leaf = symb_.small_leafs_[si];
-                  new (&small_leafs_[si]) SLNS(leaf, nodes_, aval, scaling,
-                        factor_alloc_, pool_alloc_, work,
-                        options, thread_stats[this_thread]);
-                  if(thread_stats[this_thread].flag<Flag::SUCCESS) {
+                     auto const& leaf = symb_.small_leafs_[si];
+                     new (&small_leafs_[si]) SLNS(leaf, nodes_, aval, scaling,
+                           factor_alloc_, pool_alloc_, work,
+                           options, thread_stats[this_thread]);
+                     if(thread_stats[this_thread].flag<Flag::SUCCESS) {
+#ifdef _OPENMP
+                        #pragma omp atomic write
+                        abort = true;
+                        #pragma omp cancel taskgroup
+#else
+                        stats += thread_stats[this_thread];
+                        return;
+#endif /* _OPENMP */
+                     }
+#ifdef PROFILE
+                     task_subtree.done();
+#endif
+                  } catch (std::bad_alloc const&) {
+                     thread_stats[omp_get_thread_num()].flag =
+                        Flag::ERROR_ALLOCATION;
 #ifdef _OPENMP
                      #pragma omp atomic write
                      abort = true;
                      #pragma omp cancel taskgroup
 #else
-                     stats += thread_stats[this_thread];
+                     stats += thread_stats[0];
+                     return;
+#endif /* _OPENMP */
+                  } catch (SingularError const&) {
+                     thread_stats[omp_get_thread_num()].flag =
+                        Flag::ERROR_SINGULAR;
+#ifdef _OPENMP
+                     #pragma omp atomic write
+                     abort = true;
+                     #pragma omp cancel taskgroup
+#else
+                     stats += thread_stats[0];
                      return;
 #endif /* _OPENMP */
                   }
-#ifdef PROFILE
-                  task_subtree.done();
-#endif
-               } catch (std::bad_alloc const&) {
-                  thread_stats[omp_get_thread_num()].flag =
-                     Flag::ERROR_ALLOCATION;
-#ifdef _OPENMP
-                  #pragma omp atomic write
-                  abort = true;
-                  #pragma omp cancel taskgroup
-#else
-                  stats += thread_stats[0];
-                  return;
-#endif /* _OPENMP */
-               } catch (SingularError const&) {
-                  thread_stats[omp_get_thread_num()].flag =
-                     Flag::ERROR_SINGULAR;
-#ifdef _OPENMP
-                  #pragma omp atomic write
-                  abort = true;
-                  #pragma omp cancel taskgroup
-#else
-                  stats += thread_stats[0];
-                  return;
-#endif /* _OPENMP */
-               }
-            } } // task/abort
-         }
+               } } // task/abort
+               ni = symb_.small_leafs_[si].en_;
+               ++si;
+               continue;
+            }
 
-         /* Loop over singleton nodes in order */
-         for(int ni=0; ni<symb_.nnodes_; ++ni) {
-            if(symb_[ni].insmallleaf) continue; // already handled
             auto* this_lcol = &nodes_[ni]; // for depend
             auto* parent_lcol = &nodes_[symb_[ni].parent]; // for depend
             #pragma omp task default(none) \
@@ -235,6 +240,7 @@ public:
                }
             } } // task/abort
          }
+         assert(si == symb_.small_leafs_.size());
       } // taskgroup
 
 
